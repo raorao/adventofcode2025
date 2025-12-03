@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ruby day3/day3.rb:*)",
+      "Bash(ruby:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
