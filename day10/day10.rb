@@ -118,8 +118,16 @@ end
 
 def part1(lines)
   lines.sum do |line|
-    target_indicators, buttons, joltage = parse_line(line)
-    min_button_presses(target_indicators:, buttons:)
+    target_indicators, buttons, target_joltage = parse_line(line)
+    turn_indicators_on(target_indicators:, buttons:)
+  end
+end
+
+def part2(lines)
+  lines.each_with_index.sum do |line, index|
+    target_indicators, buttons, target_joltage = parse_line(line)
+    puts "evaluating #{line} #{index}"
+    configure_joltage(target_joltage: target_joltage, buttons:)
   end
 end
 
