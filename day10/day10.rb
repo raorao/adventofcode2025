@@ -141,17 +141,37 @@ def part1(lines)
   end
 end
 
+def solve_joltage_recursive(goal, parity_patterns, memo = {})
+  return 0 if goal.all? { |v| v == 0 }
+  return memo[goal] if memo.key?(goal)
+
+  answer = Float::INFINITY
+  goal_parity = goal.map { |v| v % 2 }
+
+  # Try all patterns that match the parity
+  if parity_patterns[goal_parity]
+    parity_patterns[goal_parity].each do |effect, pattern_cost|
+      # Check if this pattern is valid (doesn't exceed goal)
+      if effect.zip(goal).all? { |e, g| e <= g }
+        # Subtract effect and divide by 2
+        new_goal = effect.zip(goal).map { |e, g| (g - e) / 2 }
+        sub_result = solve_joltage_recursive(new_goal, parity_patterns, memo)
+        answer = [answer, pattern_cost + 2 * sub_result].min if sub_result != Float::INFINITY
+      end
+    end
+  end
+
+  memo[goal] = answer
+  answer
+end
+
 def configure_joltage(target_joltage:, buttons:, line_num: nil)
   targets = target_joltage
   num_counters = targets.length
 
-  # Precompute all button patterns and their effects
-  # For each parity pattern, store patterns and their costs
   parity_patterns = {}
 
-  # Try all 2^B combinations of buttons
   (0...(1 << buttons.length)).each do |mask|
-    # Calculate effect of this button combination
     effect = Array.new(num_counters, 0)
     num_pressed = 0
 
@@ -162,13 +182,11 @@ def configure_joltage(target_joltage:, buttons:, line_num: nil)
       end
     end
 
-    # Group by parity pattern
     parity = effect.map { |v| v % 2 }
     parity_patterns[parity] ||= []
     parity_patterns[parity] << [effect, num_pressed]
   end
 
-  # Keep only minimum cost for each effect pattern within each parity
   parity_patterns.each do |parity, patterns|
     by_effect = {}
     patterns.each do |effect, cost|
@@ -179,34 +197,7 @@ def configure_joltage(target_joltage:, buttons:, line_num: nil)
     parity_patterns[parity] = by_effect
   end
 
-  # Memoized recursive solver
-  memo = {}
-
-  solve = lambda do |goal|
-    return 0 if goal.all? { |v| v == 0 }
-    return memo[goal] if memo.key?(goal)
-
-    answer = Float::INFINITY
-    goal_parity = goal.map { |v| v % 2 }
-
-    # Try all patterns that match the parity
-    if parity_patterns[goal_parity]
-      parity_patterns[goal_parity].each do |effect, pattern_cost|
-        # Check if this pattern is valid (doesn't exceed goal)
-        if effect.zip(goal).all? { |e, g| e <= g }
-          # Subtract effect and divide by 2
-          new_goal = effect.zip(goal).map { |e, g| (g - e) / 2 }
-          sub_result = solve.call(new_goal)
-          answer = [answer, pattern_cost + 2 * sub_result].min if sub_result != Float::INFINITY
-        end
-      end
-    end
-
-    memo[goal] = answer
-    answer
-  end
-
-  result = solve.call(targets)
+  result = solve_joltage_recursive(targets, parity_patterns)
   result == Float::INFINITY ? nil : result
 end
 
