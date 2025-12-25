@@ -193,15 +193,6 @@ class Region
     false
   end
 
-  def find_first_empty
-    @coordinates.each_with_index do |row, y|
-      row.each_with_index do |cell, x|
-        return [y, x] if cell == "."
-      end
-    end
-    nil
-  end
-
   def to_s
     dStr = "#{@width}x#{@height}"
     cStr = @coordinates.map { |row| row.join("") }.join("\n")
