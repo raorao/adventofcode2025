@@ -1,3 +1,5 @@
+require 'set'
+
 # --- Day 10: Factory ---
 # Just across the hall, you find a large factory. Fortunately, the Elves here have plenty of time to decorate. Unfortunately, it's because the factory machines are all offline, and none of the Elves can figure out the initialization procedure.
 
@@ -76,22 +78,38 @@
 
 def min_button_presses(target_indicators:, buttons:)
   initial_indicators = Array.new(target_indicators.length, :off)
-  queue = buttons.map { |button| {pressed: [button], indicators: initial_indicators} }
 
-  queue.each do |item|
-    new_indicators = press(item[:indicators], item[:pressed].last)
-    if new_indicators == target_indicators
-      return item[:pressed].length
-    end
+  # Check if we're already at target
+  if initial_indicators == target_indicators
+    return 0
+  end
 
+  # BFS with visited state tracking
+  visited = Set.new([initial_indicators])
+  queue = [[initial_indicators, 0]]
+
+  until queue.empty?
+    current_indicators, presses = queue.shift
+
+    # Try pressing each button
     buttons.each do |button|
-      queue << {
-        pressed: item[:pressed] + [button],
-        indicators: new_indicators
-      }
+      new_indicators = press(current_indicators, button)
+
+      # Check if we reached the target
+      if new_indicators == target_indicators
+        return presses + 1
+      end
+
+      # Add to queue if not visited
+      unless visited.include?(new_indicators)
+        visited.add(new_indicators)
+        queue << [new_indicators, presses + 1]
+      end
     end
   end
 
+  # Should never reach here if solution exists
+  nil
 end
 
 def press(indicators, button)
@@ -111,7 +129,7 @@ def parse_line(str)
     button.first.split(',').map(&:to_i)
   end
 
-  joltage = str.scan(/\{(.*?)\}/)
+  joltage = str.scan(/\{(.*?)\}/).first.first.split(',').map(&:to_i)
 
   [target_indicators, buttons, joltage]
 end
@@ -119,15 +137,87 @@ end
 def part1(lines)
   lines.sum do |line|
     target_indicators, buttons, target_joltage = parse_line(line)
-    turn_indicators_on(target_indicators:, buttons:)
+    min_button_presses(target_indicators:, buttons:)
   end
 end
+
+def configure_joltage(target_joltage:, buttons:, line_num: nil)
+  targets = target_joltage
+  num_counters = targets.length
+
+  # Precompute all button patterns and their effects
+  # For each parity pattern, store patterns and their costs
+  parity_patterns = {}
+
+  # Try all 2^B combinations of buttons
+  (0...(1 << buttons.length)).each do |mask|
+    # Calculate effect of this button combination
+    effect = Array.new(num_counters, 0)
+    num_pressed = 0
+
+    buttons.length.times do |i|
+      if mask & (1 << i) != 0
+        buttons[i].each { |counter| effect[counter] += 1 }
+        num_pressed += 1
+      end
+    end
+
+    # Group by parity pattern
+    parity = effect.map { |v| v % 2 }
+    parity_patterns[parity] ||= []
+    parity_patterns[parity] << [effect, num_pressed]
+  end
+
+  # Keep only minimum cost for each effect pattern within each parity
+  parity_patterns.each do |parity, patterns|
+    by_effect = {}
+    patterns.each do |effect, cost|
+      if !by_effect[effect] || by_effect[effect] > cost
+        by_effect[effect] = cost
+      end
+    end
+    parity_patterns[parity] = by_effect
+  end
+
+  # Memoized recursive solver
+  memo = {}
+
+  solve = lambda do |goal|
+    return 0 if goal.all? { |v| v == 0 }
+    return memo[goal] if memo.key?(goal)
+
+    answer = Float::INFINITY
+    goal_parity = goal.map { |v| v % 2 }
+
+    # Try all patterns that match the parity
+    if parity_patterns[goal_parity]
+      parity_patterns[goal_parity].each do |effect, pattern_cost|
+        # Check if this pattern is valid (doesn't exceed goal)
+        if effect.zip(goal).all? { |e, g| e <= g }
+          # Subtract effect and divide by 2
+          new_goal = effect.zip(goal).map { |e, g| (g - e) / 2 }
+          sub_result = solve.call(new_goal)
+          answer = [answer, pattern_cost + 2 * sub_result].min if sub_result != Float::INFINITY
+        end
+      end
+    end
+
+    memo[goal] = answer
+    answer
+  end
+
+  result = solve.call(targets)
+  result == Float::INFINITY ? nil : result
+end
+
 
 def part2(lines)
   lines.each_with_index.sum do |line, index|
     target_indicators, buttons, target_joltage = parse_line(line)
-    puts "evaluating #{line} #{index}"
-    configure_joltage(target_joltage: target_joltage, buttons:)
+    puts "evaluating line #{index + 1}"
+    result = configure_joltage(target_joltage: target_joltage, buttons: buttons, line_num: index + 1)
+    puts "  -> #{result}" if result
+    result
   end
 end
 
@@ -140,8 +230,10 @@ EXAMPLE_INPUT = [
 
 
 p "example input part1: #{part1(EXAMPLE_INPUT)}"
+p "example input part2: #{part2(EXAMPLE_INPUT)}"
 
 # real input
-# REAL_INPUT = File.readlines('day10/input.txt').map(&:chomp)
+REAL_INPUT = File.readlines('day10/input.txt').map(&:chomp)
 
-# p "real input part1: #{part1(REAL_INPUT)}"
+p "real input part1: #{part1(REAL_INPUT)}"
+p "real input part2: #{part2(REAL_INPUT)}"
