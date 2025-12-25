@@ -94,9 +94,40 @@ class Shape
     "#{@name}:\n#{cStr}"
   end
 
-  def rotate
-    @coordinates = @coordinates.transpose.map(&:reverse)
-    self
+  # Returns all orientations as arrays of [dy, dx] coordinates for '#' cells
+  def normalized_placements
+    @normalized_placements ||= begin
+      orientations = []
+      current = @coordinates.map(&:dup)
+
+      4.times do
+        orientations << extract_occupied_coordinates(current)
+        current = current.transpose.map(&:reverse)
+      end
+
+      # Flip and 4 more rotations
+      current = current.map(&:reverse)
+      4.times do
+        orientations << extract_occupied_coordinates(current)
+        current = current.transpose.map(&:reverse)
+      end
+
+      orientations.uniq
+    end
+  end
+
+  private
+
+  def extract_occupied_coordinates(coords)
+    result = []
+
+    coords.each_with_index do |row, y|
+      row.each_with_index do |cell, x|
+        result << [y, x] if cell == "#"
+      end
+    end
+
+    result
   end
 
   attr_reader :name, :coordinates
@@ -117,7 +148,58 @@ class Region
   end
 
   def fits_all_presents?(shapes)
-    true
+    pieces_remaining = []
+    @quantities.each do |idx, amt|
+      amt.times { pieces_remaining << shapes[idx] }
+    end
+
+    total_area = pieces_remaining.sum { |s| s.normalized_placements[0].length }
+    return false if total_area > @width * @height
+
+    pieces_remaining.sort_by! { |piece| piece.normalized_placements.length }
+
+    solve(pieces_remaining)
+  end
+
+  private
+
+  def solve(pieces_remaining)
+    return true if pieces_remaining.empty?
+
+    piece = pieces_remaining[0]
+
+    piece.normalized_placements.each do |placement|
+      # Try all positions
+      (0...@height).each do |y|
+        (0...@width).each do |x|
+          # Check bounds
+          next unless placement.all? { |py, px| y + py < @height && x + px < @width }
+
+          # Check no overlaps
+          next unless placement.all? { |py, px| @coordinates[y + py][x + px] == "." }
+
+          # Place it
+          placement.each { |py, px| @coordinates[y + py][x + px] = "#" }
+
+          # Recurse
+          return true if solve(pieces_remaining[1..-1])
+
+          # if it doesn't work, remove the piece from the board
+          placement.each { |py, px| @coordinates[y + py][x + px] = "." }
+        end
+      end
+    end
+
+    false
+  end
+
+  def find_first_empty
+    @coordinates.each_with_index do |row, y|
+      row.each_with_index do |cell, x|
+        return [y, x] if cell == "."
+      end
+    end
+    nil
   end
 
   def to_s
@@ -130,13 +212,6 @@ end
 
 def do_part1(str)
   shapes, regions = parse_input(str)
-
-  regions.count do |region|
-    puts region
-    puts shapes
-    region.fits_all_presents?(shapes)
-  end
-
   regions.count { |region| region.fits_all_presents?(shapes) }
 end
 
@@ -184,7 +259,8 @@ EXAMPLE_INPUT = <<-EOF
 12x5: 1 0 1 0 3 2
 EOF
 
-puts "example input part1: #{do_part1(EXAMPLE_INPUT)}"
+# export
+puts "example input part1: #{do_part1(EXAMPLE_INPUT)} expected: 2"
 
 # real input
 real_input = File.read("day12/input.txt")
