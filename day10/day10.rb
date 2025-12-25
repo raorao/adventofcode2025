@@ -134,41 +134,8 @@ def parse_line(str)
   [target_indicators, buttons, joltage]
 end
 
-def part1(lines)
-  lines.sum do |line|
-    target_indicators, buttons, target_joltage = parse_line(line)
-    min_button_presses(target_indicators:, buttons:)
-  end
-end
-
-def solve_joltage_recursive(goal, parity_patterns, memo = {})
-  return 0 if goal.all? { |v| v == 0 }
-  return memo[goal] if memo.key?(goal)
-
-  answer = Float::INFINITY
-  goal_parity = goal.map { |v| v % 2 }
-
-  # Try all patterns that match the parity
-  if parity_patterns[goal_parity]
-    parity_patterns[goal_parity].each do |effect, pattern_cost|
-      # Check if this pattern is valid (doesn't exceed goal)
-      if effect.zip(goal).all? { |e, g| e <= g }
-        # Subtract effect and divide by 2
-        new_goal = effect.zip(goal).map { |e, g| (g - e) / 2 }
-        sub_result = solve_joltage_recursive(new_goal, parity_patterns, memo)
-        answer = [answer, pattern_cost + 2 * sub_result].min if sub_result != Float::INFINITY
-      end
-    end
-  end
-
-  memo[goal] = answer
-  answer
-end
-
-def configure_joltage(target_joltage:, buttons:, line_num: nil)
-  targets = target_joltage
-  num_counters = targets.length
-
+def generate_parity_patterns(target_joltage:, buttons:)
+  num_counters = target_joltage.length
   parity_patterns = {}
 
   (0...(1 << buttons.length)).each do |mask|
@@ -196,19 +163,41 @@ def configure_joltage(target_joltage:, buttons:, line_num: nil)
     end
     parity_patterns[parity] = by_effect
   end
-
-  result = solve_joltage_recursive(targets, parity_patterns)
-  result == Float::INFINITY ? nil : result
 end
 
+def configure_joltage(goal, parity_patterns, memo = {})
+  return 0 if goal.all? { |v| v == 0 }
+  return memo[goal] if memo.key?(goal)
+
+  answer = Float::INFINITY
+  goal_parity = goal.map { |v| v % 2 }
+
+  if parity_patterns[goal_parity]
+    parity_patterns[goal_parity].each do |effect, pattern_cost|
+      if effect.zip(goal).all? { |e, g| e <= g }
+        new_goal = effect.zip(goal).map { |e, g| (g - e) / 2 }
+        sub_result = configure_joltage(new_goal, parity_patterns, memo)
+        answer = [answer, pattern_cost + 2 * sub_result].min if sub_result != Float::INFINITY
+      end
+    end
+  end
+
+  memo[goal] = answer
+end
+
+def part1(lines)
+  lines.sum do |line|
+    target_indicators, buttons, target_joltage = parse_line(line)
+    min_button_presses(target_indicators:, buttons:)
+  end
+end
 
 def part2(lines)
   lines.each_with_index.sum do |line, index|
     target_indicators, buttons, target_joltage = parse_line(line)
+    parity_patterns = generate_parity_patterns(target_joltage:, buttons:)
     puts "evaluating line #{index + 1}"
-    result = configure_joltage(target_joltage: target_joltage, buttons: buttons, line_num: index + 1)
-    puts "  -> #{result}" if result
-    result
+    configure_joltage(target_joltage, parity_patterns)
   end
 end
 
